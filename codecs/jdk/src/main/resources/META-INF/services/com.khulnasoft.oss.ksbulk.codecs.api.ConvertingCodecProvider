@@ -1,0 +1,5 @@
+com.khulnasoft.oss.ksbulk.codecs.jdk.bool.BooleanConvertingCodecsProvider
+com.khulnasoft.oss.ksbulk.codecs.jdk.collection.CollectionConvertingCodecsProvider
+com.khulnasoft.oss.ksbulk.codecs.jdk.map.MapConvertingCodecsProvider
+com.khulnasoft.oss.ksbulk.codecs.jdk.number.NumericConvertingCodecsProvider
+com.khulnasoft.oss.ksbulk.codecs.jdk.temporal.TemporalConvertingCodecsProvider

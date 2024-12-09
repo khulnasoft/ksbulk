@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright KhulnaSoft, Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <artifactId>ksbulk-parent</artifactId>
+    <groupId>com.khulnasoft.oss</groupId>
+    <version>1.11.1-SNAPSHOT</version>
+  </parent>
+  <artifactId>ksbulk-distribution</artifactId>
+  <name>KhulnaSoft Bulk Loader - Distribution</name>
+  <description>Binary distribution of the KhulnaSoft Bulk Loader.</description>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.khulnasoft.oss</groupId>
+        <artifactId>ksbulk-bom</artifactId>
+        <version>${project.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+  <dependencies>
+    <!-- driver -->
+    <dependency>
+      <groupId>com.khulnasoft.oss</groupId>
+      <artifactId>java-driver-core</artifactId>
+    </dependency>
+    <!-- supported connectors -->
+    <dependency>
+      <groupId>com.khulnasoft.oss</groupId>
+      <artifactId>ksbulk-connectors-csv</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.khulnasoft.oss</groupId>
+      <artifactId>ksbulk-connectors-json</artifactId>
+    </dependency>
+    <!-- supported workflows -->
+    <dependency>
+      <groupId>com.khulnasoft.oss</groupId>
+      <artifactId>ksbulk-workflow-load</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.khulnasoft.oss</groupId>
+      <artifactId>ksbulk-workflow-unload</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.khulnasoft.oss</groupId>
+      <artifactId>ksbulk-workflow-count</artifactId>
+    </dependency>
+    <!-- batcher and executor implementations -->
+    <dependency>
+      <groupId>com.khulnasoft.oss</groupId>
+      <artifactId>ksbulk-batcher-reactor</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.khulnasoft.oss</groupId>
+      <artifactId>ksbulk-executor-reactor</artifactId>
+    </dependency>
+    <!-- runner -->
+    <dependency>
+      <groupId>com.khulnasoft.oss</groupId>
+      <artifactId>ksbulk-runner</artifactId>
+    </dependency>
+  </dependencies>
+  <build>
+    <finalName>ksbulk-${project.version}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>report-aggregate</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-source-plugin</artifactId>
+        <configuration>
+          <skipSource>true</skipSource>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <finalName>ksbulk-${project.version}</finalName>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>license-maven-plugin</artifactId>
+            <version>1.14</version>
+            <configuration>
+              <excludedScopes>test</excludedScopes>
+              <licenseMerges>
+                <licenseMerge>Apache License, Version 2.0|The Apache Software License, Version 2.0|Apache Public License 2.0|Apache License 2.0|Apache 2.0|Apache 2|Apache-2.0</licenseMerge>
+                <licenseMerge>BSD License|The BSD License|BSD|BSD-2-Clause|BSD 2-Clause License</licenseMerge>
+                <licenseMerge>MIT License|The MIT License|MIT license</licenseMerge>
+                <licenseMerge>Creative Commons CC0|Public Domain, per Creative Commons CC0|CC0</licenseMerge>
+                <licenseMerge>Eclipse Public License, Version 1.0|Eclipse Public License - v 1.0|Common Public License - v 1.0</licenseMerge>
+              </licenseMerges>
+              <failOnMissing>true</failOnMissing>
+              <outputDirectory>${project.build.directory}/generated-sources/license/META-INF</outputDirectory>
+            </configuration>
+            <executions>
+              <execution>
+                <id>add-third-party</id>
+                <goals>
+                  <goal>add-third-party</goal>
+                </goals>
+                <phase>process-sources</phase>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>src-dependencies</id>
+                <goals>
+                  <goal>unpack-dependencies</goal>
+                </goals>
+                <phase>prepare-package</phase>
+                <configuration>
+                  <classifier>sources</classifier>
+                  <outputDirectory>${project.build.directory}/sources</outputDirectory>
+                  <includeGroupIds>com.khulnasoft.oss</includeGroupIds>
+                  <includes>com/khulnasoft/oss/ksbulk/**/*.java</includes>
+                  <excludes>com/khulnasoft/oss/ksbulk/generated/**</excludes>
+                  <includeScope>runtime</includeScope>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>3.2.4</version>
+            <executions>
+              <execution>
+                <id>uber-jar</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>shade</goal>
+                </goals>
+                <configuration>
+                  <shadedArtifactAttached>false</shadedArtifactAttached>
+                  <filters>
+                    <filter>
+                      <artifact>*</artifact>
+                      <excludes>
+                        <exclude>META-INF/MANIFEST.MF</exclude>
+                        <exclude>META-INF/maven/**</exclude>
+                        <exclude>META-INF/jandex.idx</exclude>
+                        <exclude>META-INF/native-image/**</exclude>
+                        <exclude>**/module-info.class</exclude>
+                        <exclude>**/*.kotlin_module</exclude>
+                        <exclude>native_protocol*.spec</exclude>
+                        <exclude>dse_protocol*.spec</exclude>
+                      </excludes>
+                    </filter>
+                  </filters>
+                  <transformers>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                      <mainClass>com.khulnasoft.oss.ksbulk.runner.KhulnaSoftBulkLoader</mainClass>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                      <resource>ksbulk-reference.conf</resource>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                      <resource>driver-reference.conf</resource>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                      <resource>reference.conf</resource>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                      <resource>META-INF/NOTICE</resource>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                      <resource>META-INF/LICENSE</resource>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                      <resource>META-INF/NOTICE.txt</resource>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                      <resource>META-INF/LICENSE.txt</resource>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                      <resource>META-INF/io.netty.versions.properties</resource>
+                    </transformer>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
+                  </transformers>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>aggregate-javadocs</id>
+                <inherited>false</inherited>
+                <phase>package</phase>
+                <goals>
+                  <goal>aggregate-jar</goal>
+                </goals>
+                <configuration>
+                  <skip>false</skip>
+                  <verbose>false</verbose>
+                  <quiet>true</quiet>
+                  <excludePackageNames>com.khulnasoft.oss.ksbulk.generated*</excludePackageNames>
+                  <includeDependencySources>true</includeDependencySources>
+                  <dependencySourceIncludes>
+                    <dependencySourceInclude>com.khulnasoft.oss:ksbulk*</dependencySourceInclude>
+                  </dependencySourceIncludes>
+                  <includeTransitiveDependencySources>true</includeTransitiveDependencySources>
+                  <doctitle>KhulnaSoft Bulk Loader ${project.version} API</doctitle>
+                  <windowtitle>KhulnaSoft Bulk Loader ${project.version} API</windowtitle>
+                  <links>
+                    <link>https://www.javadoc.io/doc/com.khulnasoft.oss/java-driver-core/${driver.version}</link>
+                    <link>https://www.javadoc.io/doc/io.netty/netty-all/${netty.version}</link>
+                    <link>https://www.javadoc.io/doc/com.typesafe/config/${config.version}</link>
+                    <link>https://www.reactive-streams.org/reactive-streams-${reactive-streams.version}-javadoc/</link>
+                    <link>https://www.javadoc.io/doc/io.projectreactor/reactor-core/${reactor.version}</link>
+                    <link>https://www.javadoc.io/doc/com.fasterxml.jackson.core/jackson-core/${jackson.version}</link>
+                    <link>https://www.javadoc.io/doc/com.fasterxml.jackson.core/jackson-databind/${jackson.version}</link>
+                    <link>https://www.javadoc.io/doc/org.antlr/antlr4/${antlr4.version}</link>
+                  </links>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <artifactId>maven-assembly-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>assemble-distribution</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>single</goal>
+                </goals>
+                <configuration>
+                  <appendAssemblyId>false</appendAssemblyId>
+                  <descriptors>
+                    <descriptor>src/assembly/distribution.xml</descriptor>
+                  </descriptors>
+                  <tarLongFileMode>posix</tarLongFileMode>
+                </configuration>
+              </execution>
+              <execution>
+                <id>generate-sources-jar</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>single</goal>
+                </goals>
+                <configuration>
+                  <appendAssemblyId>true</appendAssemblyId>
+                  <finalName>ksbulk-${project.version}</finalName>
+                  <descriptors>
+                    <descriptor>src/assembly/sources.xml</descriptor>
+                  </descriptors>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

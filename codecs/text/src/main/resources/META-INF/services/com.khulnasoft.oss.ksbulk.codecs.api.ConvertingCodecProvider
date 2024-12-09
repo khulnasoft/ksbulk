@@ -1,0 +1,2 @@
+com.khulnasoft.oss.ksbulk.codecs.text.string.StringConvertingCodecProvider
+com.khulnasoft.oss.ksbulk.codecs.text.json.JsonNodeConvertingCodecProvider

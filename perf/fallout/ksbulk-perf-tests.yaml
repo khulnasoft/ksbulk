@@ -1,0 +1,788 @@
+server_type: dse
+server_install_type: tarball
+server_version: 6.7.7
+cql_version: 3.4.5
+reuse: false
+ksbulk_branch: 1.x
+connectors: csv,json
+workloads: load,unload,count
+verbosity: 2
+
+---
+
+ensemble:
+  server:
+    node.count: 5
+    provisioner:
+      name: ctool
+      properties:
+        cloud.provider: openstack
+        cloud.tenant: performance
+        cloud.instance.type: ms1.small
+        cloud.instance.platform: xenial
+        mark_for_reuse: {{reuse}}
+    configuration_manager:
+      - name: ctool
+        properties:
+          product.type: {{server_type}}
+          product.install.type: {{server_install_type}}
+          product.version: {{server_version}}
+          enable.graph: false
+          cassandra.yaml.set:
+            hinted_handoff_enabled: false
+            auto_snapshot: false
+            batch_size_warn_threshold_in_kb: 64
+            unlogged_batch_across_partitions_warn_threshold: 10
+      - name: ctool_monitoring
+        properties:
+          components: os,jvm,cassandra
+  observer:
+    node.count: 1
+    provisioner:
+      name: ctool
+      properties:
+        cloud.provider: nebula
+        cloud.tenant: drivers-automation
+        cloud.instance.type: m3.large
+        mark_for_reuse: {{reuse}}
+    configuration_manager:
+      - name: ctool
+      - name: ctool_monitoring
+        properties:
+          graphite.create_server: true
+          save_graphs: true
+          export.enabled: true
+          export.prefix: performance_regressions.oss.test.ksbulk
+          export.metrics:
+            - AVERAGE_CONTEXT_SWITCH(<PHASE>)
+            - AVERAGE_LOAD(<PHASE>)
+            - AVERAGE_DISK_IO(<PHASE>)
+            - AVERAGE_MEMORY(<PHASE>)
+            - AVERAGE_CPU(<PHASE>)
+            - AVERAGE_GC(<PHASE>)
+            - AVERAGE_NETWORK_IO(<PHASE>)
+  clients:
+    - name: ksbulk-client
+      node.count: 1
+      provisioner:
+        name: ctool
+        properties:
+          cloud.provider: nebula
+          cloud.tenant: drivers-automation
+          cloud.instance.type: c4.8xlarge
+          mark_for_reuse: {{reuse}}
+      configuration_manager:
+        - name: ctool
+          properties:
+            install.maven: true
+            java.version: openjdk8
+        - name: ctool_monitoring
+          properties:
+            components: os
+
+workload:
+  phases:
+
+    - prepare-data:
+        module: bash
+        properties:
+          target.group: ksbulk-client
+          export_output: true
+          timeout: 2 hours
+          script: |
+            cd ${FALLOUT_SCRATCH_DIR}
+            sudo apt update --assume-yes
+            sudo apt-get install lftp --assume-yes
+
+            #setup data-set (random Partition Key)
+            mkdir -p ${FALLOUT_SCRATCH_DIR}/mnt/data/DSEBulkLoadTest
+            chmod 777 ${FALLOUT_SCRATCH_DIR}/mnt/data
+            cd ${FALLOUT_SCRATCH_DIR}/mnt/data/DSEBulkLoadTest
+
+            # download in and out form remote ftp
+
+            contains() { for e in  $(echo "$1" | tr "," "\n"); do [[ "$e" == "$2" ]] && return 0; done; return 1; }
+
+            if contains {{connectors}} csv; then
+              echo "Transferring CSV data from FTP server..."
+              lftp -e "mirror /ksbulk/in ${FALLOUT_SCRATCH_DIR}/mnt/data/DSEBulkLoadTest/ && exit" -u 'dse_ftp','dse$#@RULES' ftp://fileserver001.khulnasoft.lan/
+              echo "CSV Transfer done"
+              du -ah ${FALLOUT_SCRATCH_DIR}/mnt/data/DSEBulkLoadTest/in
+            fi
+
+            if contains {{connectors}} json; then
+              echo "Transferring JSON data from FTP server..."
+              lftp -e "mirror /ksbulk/json ${FALLOUT_SCRATCH_DIR}/mnt/data/DSEBulkLoadTest/ && exit" -u 'dse_ftp','dse$#@RULES' ftp://fileserver001.khulnasoft.lan/
+              echo "JSON Transfer done"
+              du -ah ${FALLOUT_SCRATCH_DIR}/mnt/data/DSEBulkLoadTest/json
+            fi
+
+            #install maven and java
+            sudo apt-get -q install maven unzip --assume-yes
+
+            # install cqlsh
+            sudo pip install --upgrade pip
+            sudo pip install cqlsh
+
+    - setup-schema:
+        module: cqlsh
+        properties:
+          target.ordinals: 0
+          command: >
+            CREATE KEYSPACE IF NOT EXISTS test WITH replication = {'class': 'SimpleStrategy', 'replication_factor': '3'};
+            CREATE TABLE IF NOT EXISTS test.test100b(pkey TEXT, ccol BIGINT, data TEXT, PRIMARY KEY ((pkey), ccol));
+            CREATE TABLE IF NOT EXISTS test.test1kb(pkey TEXT, ccol BIGINT, data TEXT, PRIMARY KEY ((pkey), ccol));
+            CREATE TABLE IF NOT EXISTS test.test10kb(pkey TEXT, ccol BIGINT, data TEXT, PRIMARY KEY ((pkey), ccol));
+            CREATE TABLE IF NOT EXISTS test.test1mb(pkey TEXT, ccol BIGINT, data TEXT, PRIMARY KEY ((pkey), ccol));
+            CREATE TABLE IF NOT EXISTS test.test100(pkey BIGINT, ccol BIGINT, col0 BIGINT, col1 BIGINT, col2 BIGINT, col3 BIGINT, col4 BIGINT, col5 BIGINT, col6 BIGINT, col7 BIGINT, col8 BIGINT, col9 BIGINT, col10 BIGINT, col11 BIGINT, col12 BIGINT, col13 BIGINT, col14 BIGINT, col15 BIGINT, col16 BIGINT, col17 BIGINT, col18 BIGINT, col19 BIGINT, col20 BIGINT, col21 BIGINT, col22 BIGINT, col23 BIGINT, col24 BIGINT, col25 BIGINT, col26 BIGINT, col27 BIGINT, col28 BIGINT, col29 BIGINT, col30 BIGINT, col31 BIGINT, col32 BIGINT, col33 BIGINT, col34 BIGINT, col35 BIGINT, col36 BIGINT, col37 BIGINT, col38 BIGINT, col39 BIGINT, col40 BIGINT, col41 BIGINT, col42 BIGINT, col43 BIGINT, col44 BIGINT, col45 BIGINT, col46 BIGINT, col47 BIGINT, col48 BIGINT, col49 BIGINT, col50 BIGINT, col51 BIGINT, col52 BIGINT, col53 BIGINT, col54 BIGINT, col55 BIGINT, col56 BIGINT, col57 BIGINT, col58 BIGINT, col59 BIGINT, col60 BIGINT, col61 BIGINT, col62 BIGINT, col63 BIGINT, col64 BIGINT, col65 BIGINT, col66 BIGINT, col67 BIGINT, col68 BIGINT, col69 BIGINT, col70 BIGINT, col71 BIGINT, col72 BIGINT, col73 BIGINT, col74 BIGINT, col75 BIGINT, col76 BIGINT, col77 BIGINT, col78 BIGINT, col79 BIGINT, col80 BIGINT, col81 BIGINT, col82 BIGINT, col83 BIGINT, col84 BIGINT, col85 BIGINT, col86 BIGINT, col87 BIGINT, col88 BIGINT, col89 BIGINT, col90 BIGINT, col91 BIGINT, col92 BIGINT, col93 BIGINT, col94 BIGINT, col95 BIGINT, col96 BIGINT, col97 BIGINT, PRIMARY KEY ((pkey), ccol));
+            CREATE TABLE IF NOT EXISTS test.test10(pkey BIGINT, ccol BIGINT, col0 BIGINT, col1 BIGINT, col2 BIGINT, col3 BIGINT, col4 BIGINT, col5 BIGINT, col6 BIGINT, col7 BIGINT, PRIMARY KEY ((pkey), ccol));
+            CREATE TABLE IF NOT EXISTS test.transactions(user_id TEXT, date timestamp, item TEXT, price float, quantity int, total decimal, currency TEXT, payment TEXT, contact list<text>, PRIMARY KEY ((user_id), date));
+
+    - clone-and-build-ksbulk:
+        module: bash
+        properties:
+          target.group: ksbulk-client
+          export_output: false
+          script: |
+            cd ${FALLOUT_SCRATCH_DIR}
+            echo "Cloning KSBulk repository..."
+            git clone -b {{ksbulk_branch}} git@github.com:riptano/ksbulk.git
+            cd ksbulk
+            echo "Building KSBulk..."
+            mvn clean package -DskipTests -Prelease --quiet
+            echo "Build finished successfully"
+            version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+            sha=$(git rev-parse --short HEAD)
+            echo "KSBulk version: $version branch: {{ksbulk_branch}} SHA: $sha"
+            if [[ -d dist ]]
+            then
+              cp dist/target/*.zip ${FALLOUT_SCRATCH_DIR}/mnt/data/
+            else
+              cp distribution/target/*.zip ${FALLOUT_SCRATCH_DIR}/mnt/data/
+            fi
+            cd ${FALLOUT_SCRATCH_DIR}/mnt/data/
+            unzip -q *.zip
+            rm *.zip
+            mv ksbulk-* ksbulk
+            mkdir -p ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs
+
+    - disable-auto-compaction:
+        module: bash
+        properties:
+          target.group: server
+          target.ordinals: all
+          export_output: false
+          script: |
+            nodetool -h localhost disableautocompaction test
+            sleep 2m
+
+    - load-csv-performance-test:
+        module: bash
+        properties:
+          target.group: ksbulk-client
+          export_output: true
+          timeout: 48 hours
+          script: |
+            contains() { for e in  $(echo "$1" | tr "," "\n"); do [[ "$e" == "$2" ]] && return 0; done; return 1; }
+            if contains {{connectors}} csv && contains {{workloads}} load; then
+              cd ${FALLOUT_SCRATCH_DIR}
+
+              for MAX_FILES in 1C 0.5C 1
+              do
+              for MAX_QUERIES in AUTO
+              do
+
+              echo "CSV - Loading 100B (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test100b;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test100b -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data100B/ \
+                --batch.mode REPLICA_SET \
+                --batch.maxBatchStatements 10 \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_CSV_100B_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 100B (batch disabled) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test100b;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test100b -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data100B/ \
+                --batch.mode DISABLED \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_CSV_100B_BATCH_DISABLED_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 1KB (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test1kb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test1kb -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data1KB/ \
+                --batch.mode REPLICA_SET \
+                --batch.maxBatchStatements 10 \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_CSV_1KB_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 1KB (compressed) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test1kb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test1kb -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data1KB/ \
+                --batch.mode REPLICA_SET \
+                --batch.maxBatchStatements 10 \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --driver.advanced.protocol.compression LZ4 \
+                --engine.executionId LOAD_CSV_1KB_COMPRESSED_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 1KB (batch disabled) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test1kb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test1kb -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data1KB/ \
+                --batch.mode DISABLED \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_CSV_1KB_BATCH_DISABLED_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 1KB (batch disabled, compressed) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test1kb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test1kb -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data1KB/ \
+                --batch.mode DISABLED \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --driver.advanced.protocol.compression LZ4 \
+                --engine.executionId LOAD_CSV_1KB_COMPRESSED_BATCH_DISABLED_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 10KB (batch disabled) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test10kb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test10kb -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data10KB/ \
+                --connector.csv.maxCharsPerColumn 11000 \
+                --batch.mode DISABLED \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_CSV_10KB_BATCH_DISABLED_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 10KB (batch disabled, compressed) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test10kb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test10kb -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data10KB/ \
+                --connector.csv.maxCharsPerColumn 11000 \
+                --batch.mode DISABLED \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --driver.advanced.protocol.compression LZ4 \
+                --engine.executionId LOAD_CSV_10KB_COMPRESSED_BATCH_DISABLED_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 1MB (batch disabled) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test1mb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test1mb -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data1MB/ \
+                --connector.csv.maxCharsPerColumn 1100000 \
+                --batch.mode DISABLED \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_CSV_1MB_BATCH_DISABLED_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 1MB (batch disabled, compressed) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test1mb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test1mb -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data1MB/ \
+                --connector.csv.maxCharsPerColumn 1100000 \
+                --batch.mode DISABLED \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --driver.advanced.protocol.compression LZ4 \
+                --engine.executionId LOAD_CSV_1MB_COMPRESSED_BATCH_DISABLED_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading 10 cols (multiple files) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test10;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test10 -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/data10/ \
+                --batch.mode REPLICA_SET \
+                --batch.maxBatchStatements 10 \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_CSV_10_COLS_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading transactions (multiple files) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.transactions;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t transactions -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/transactions/generated \
+                -delim '|' \
+                -m 'user_id,date,item,price,quantity,total,currency,payment,contact' \
+                --codec.timestamp ISO_ZONED_DATE_TIME \
+                --batch.mode PARTITION_KEY \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_CSV_TRANSACTIONS_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "CSV - Loading transactions (multiple files, batch disabled) (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.transactions;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t transactions -header false \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/in/transactions/generated \
+                -delim '|' \
+                -m 'user_id,date,item,price,quantity,total,currency,payment,contact' \
+                --codec.timestamp ISO_ZONED_DATE_TIME \
+                --batch.mode DISABLED \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_CSV_TRANSACTIONS_BATCH_DISABLED_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              done
+              done
+
+              rm -Rf mnt/data/DSEBulkLoadTest/in
+
+            else
+              echo "ignoring load-csv-performance-test step"
+            fi
+
+    - load-json-performance-test:
+        module: bash
+        properties:
+          target.group: ksbulk-client
+          export_output: true
+          timeout: 48 hours
+          script: |
+            contains() { for e in  $(echo "$1" | tr "," "\n"); do [[ "$e" == "$2" ]] && return 0; done; return 1; }
+            if contains {{connectors}} json && contains {{workloads}} load; then
+              cd ${FALLOUT_SCRATCH_DIR}
+
+              for MAX_FILES in 1C 1
+              do
+              for MAX_QUERIES in AUTO
+              do
+
+              echo "JSON - Loading 100B (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test100b;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test100b -c json \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/json/data100B/ \
+                --batch.mode REPLICA_SET \
+                --batch.maxBatchStatements 10 \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_JSON_100B_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "JSON - Loading 1KB (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test1kb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test1kb -c json \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/json/data1KB/  \
+                --batch.mode REPLICA_SET \
+                --batch.maxBatchStatements 10 \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_JSON_1KB_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES  \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "JSON - Loading 10KB (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test10kb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test10kb -c json  \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/json/data10KB/  \
+                --batch.mode DISABLED  \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_JSON_10KB_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES  \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "JSON - Loading 1MB (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test1mb;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test1mb -c json  \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/json/data1MB/  \
+                --batch.mode DISABLED \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_JSON_1MB_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES  \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "JSON - Loading 10 cols (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.test10;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t test10 -c json  \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/json/data10/  \
+                --batch.mode REPLICA_SET  \
+                --batch.maxBatchStatements 10  \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_JSON_10_COLS_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES  \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "JSON - Loading transactions (maxConcurrentFiles $MAX_FILES, maxConcurrentQueries $MAX_QUERIES)"
+              cqlsh ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} --cqlversion={{cql_version}} -e 'TRUNCATE test.transactions;'
+              mnt/data/ksbulk/bin/ksbulk load -verbosity {{verbosity}} -k test -t transactions -c json  \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                -url mnt/data/DSEBulkLoadTest/json/transactions/generated  \
+                --codec.timestamp ISO_ZONED_DATE_TIME  \
+                --batch.mode PARTITION_KEY  \
+                -maxConcurrentFiles ${MAX_FILES} \
+                --engine.maxConcurrentQueries ${MAX_QUERIES} \
+                --engine.executionId LOAD_JSON_TRANSACTIONS_${MAX_FILES}_FILES_${MAX_QUERIES}_QUERIES  \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              done
+              done
+
+              rm -Rf mnt/data/DSEBulkLoadTest/json
+
+            else
+              echo "ignoring load-json-performance-test step"
+            fi
+
+    - repair:
+        module: repair
+        properties:
+          keyspace: test
+          full: true
+          max.server.tasks: 4
+
+    - compact:
+        module: bash
+        properties:
+          target.group: server
+          target.ordinals: all
+          export_output: false
+          timeout: 8 hours
+          script: |
+            nodetool -h localhost enableautocompaction test
+            nodetool -h localhost compact test
+
+    - wait-for-compactions:
+        module: wait_for_compactions
+
+    - unload-csv-performance-test:
+        module: bash
+        properties:
+          target.group: ksbulk-client
+          export_output: true
+          timeout: 48 hours
+          script: |
+            contains() { for e in  $(echo "$1" | tr "," "\n"); do [[ "$e" == "$2" ]] && return 0; done; return 1; }
+            if contains {{connectors}} csv && contains {{workloads}} unload; then
+              cd ${FALLOUT_SCRATCH_DIR}
+
+              for MAX_QUERIES in AUTO 1
+              do
+              for MAX_FILES in 1C 0.5C 1
+              do
+
+              echo "CSV - Unloading 100B maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data100B/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test100b -header false \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data100B/  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_CSV_100B_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data100B/output*.csv
+
+              echo "CSV - Unloading 1KB maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data1KB/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test1kb -header false \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data1KB/  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_CSV_1KB_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data1KB/output*.csv
+
+              echo "CSV - Unloading 10KB maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data10KB/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test10kb -header false \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data10KB/  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_CSV_10KB_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data10KB/output*.csv
+
+              echo "CSV - Unloading 1MB  maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data1MB/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test1mb -header false \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data1MB/ \
+              --driver.advanced.continuous-paging.page-size 100 \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_CSV_1MB_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data1MB/output*.csv
+
+              echo "CSV - Unloading 10 cols  maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data10/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test10 -header false \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data10/  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_CSV_10_COLS_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data10/output*.csv
+
+              echo "CSV - Unloading transactions  maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/transactions
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t transactions -header false \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/transactions/  \
+              -m 'user_id,date,item,price,quantity,total,currency,payment,contact'  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_CSV_TRANSACTIONS_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/transactions/output*.csv
+
+              done
+              done
+
+              rm -Rf mnt/data/DSEBulkLoadTest/out/
+
+            else
+              echo "ignoring unload-csv-performance-test step"
+            fi
+
+    - unload-json-performance-test:
+        module: bash
+        properties:
+          target.group: ksbulk-client
+          export_output: true
+          timeout: 48 hours
+          script: |
+            contains() { for e in  $(echo "$1" | tr "," "\n"); do [[ "$e" == "$2" ]] && return 0; done; return 1; }
+            if contains {{connectors}} json && contains {{workloads}} unload; then
+              cd ${FALLOUT_SCRATCH_DIR}
+
+              for MAX_QUERIES in AUTO
+              do
+              for MAX_FILES in 0.5C
+              do
+
+              echo "JSON - Unloading 100B maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data100B/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test100b  \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data100B/  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_JSON_100B_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data100B/output*.json
+
+              echo "JSON - Unloading 1KB maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data1KB/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test1kb  \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data1KB/  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_JSON_1KB_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data1KB/output*.json
+
+              echo "JSON - Unloading 10KB maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data10KB/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test10kb  \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data10KB/  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_JSON_10KB_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data10KB/output*.json
+
+              echo "JSON - Unloading 1MB  maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data1MB/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test1mb  \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data1MB/ \
+              --driver.advanced.continuous-paging.page-size 100 \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_JSON_1MB_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data1MB/output*.json
+
+              echo "JSON - Unloading 10 cols  maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/data10/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t test10  \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/data10/  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_JSON_10_COLS_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/data10/output*.json
+
+              echo "JSON - Unloading transactions  maxConcurrentQueries $MAX_QUERIES maxConcurrentFiles $MAX_FILES"
+              rm -Rf mnt/data/DSEBulkLoadTest/out/transactions/
+              mnt/data/ksbulk/bin/ksbulk unload -verbosity {{verbosity}} -k test -t transactions  \
+              -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+              -url mnt/data/DSEBulkLoadTest/out/transactions/  \
+              -m 'user_id,date,item,price,quantity,total,currency,payment,contact'  \
+              --engine.maxConcurrentQueries $MAX_QUERIES \
+              -maxConcurrentFiles $MAX_FILES \
+              --schema.splits 32C \
+              --engine.executionId UNLOAD_JSON_TRANSACTIONS_${MAX_QUERIES}_QUERIES_${MAX_FILES}_FILES \
+              -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+              wc -l mnt/data/DSEBulkLoadTest/out/transactions/output*.json
+
+              done
+              done
+
+              rm -Rf mnt/data/DSEBulkLoadTest/out/
+
+            else
+              echo "ignoring unload-json-performance-test step"
+            fi
+
+    - count-performance-test:
+        module: bash
+        properties:
+          target.group: ksbulk-client
+          export_output: true
+          timeout: 24 hours
+          script: |
+            contains() { for e in  $(echo "$1" | tr "," "\n"); do [[ "$e" == "$2" ]] && return 0; done; return 1; }
+            if contains {{workloads}} count; then
+
+              cd ${FALLOUT_SCRATCH_DIR}
+
+              for MAX_QUERIES in AUTO 1C 0.5C 1
+              do
+
+              echo "Counting 100B (maxConcurrentQueries $MAX_QUERIES)"
+              mnt/data/ksbulk/bin/ksbulk count -verbosity {{verbosity}} -k test -t test100b  \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                --engine.maxConcurrentQueries $MAX_QUERIES \
+                --schema.splits 32C \
+                --engine.executionId COUNT_100B_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "Counting 1KB (maxConcurrentQueries $MAX_QUERIES)"
+              mnt/data/ksbulk/bin/ksbulk count -verbosity {{verbosity}} -k test -t test1kb  \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                --engine.maxConcurrentQueries $MAX_QUERIES \
+                --schema.splits 32C \
+                --engine.executionId COUNT_1KB_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "Counting 10KB (maxConcurrentQueries $MAX_QUERIES)"
+              mnt/data/ksbulk/bin/ksbulk count -verbosity {{verbosity}} -k test -t test10kb  \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                --engine.maxConcurrentQueries $MAX_QUERIES \
+                --schema.splits 32C \
+                --engine.executionId COUNT_10KB_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "Counting 1MB (maxConcurrentQueries $MAX_QUERIES)"
+              mnt/data/ksbulk/bin/ksbulk count -verbosity {{verbosity}} -k test -t test1mb  \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                --engine.maxConcurrentQueries $MAX_QUERIES \
+                --schema.splits 32C \
+                --engine.executionId COUNT_1MB_${MAX_QUERIES}_QUERIES \
+                --driver.advanced.continuous-paging.page-size 100 \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "Counting 10 columns (maxConcurrentQueries $MAX_QUERIES)"
+              mnt/data/ksbulk/bin/ksbulk count -verbosity {{verbosity}} -k test -t test10 \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                --engine.maxConcurrentQueries $MAX_QUERIES \
+                --schema.splits 32C \
+                --engine.executionId COUNT_10_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              echo "Counting transactions (maxConcurrentQueries $MAX_QUERIES)"
+              mnt/data/ksbulk/bin/ksbulk count -verbosity {{verbosity}} -k test -t transactions  \
+                -h ${FALLOUT_SERVER_PRODUCT_CONTACT_POINT} \
+                --engine.maxConcurrentQueries $MAX_QUERIES \
+                --schema.splits 32C \
+                --engine.executionId COUNT_TRANSACTIONS_${MAX_QUERIES}_QUERIES \
+                -logDir ${FALLOUT_ARTIFACT_DIR}/ksbulk-logs 2>/dev/null
+              echo "Exit status" $?
+
+              done
+
+            else
+              echo "ignoring count-performance-test step"
+            fi
+
+  checkers:
+    verify_success:
+      checker: nofail

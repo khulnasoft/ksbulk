@@ -1,0 +1,15 @@
+.settings
+.DS_Store
+
+/.idea
+*.iml
+.classpath
+.project
+
+.java-version
+.python-version
+
+target/
+dependency-reduced-pom.xml
+
+logs/

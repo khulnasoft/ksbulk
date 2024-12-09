@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright KhulnaSoft, Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+-->
+<configuration>
+  <!--
+  This file is only used in unit tests, and before/after integration tests,
+  by the test infrastructure code.
+  Actual integration tests will always switch to the "production" configuration
+  file "logback.xml" instead; this file is located in workflow-commons.
+  -->
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%-5level [%thread] %logger{40} - %msg%n</pattern>
+    </encoder>
+  </appender>
+  <appender name="NOP" class="ch.qos.logback.core.helpers.NOPAppender"/>
+  <root level="${log.root.level:-WARN}">
+    <appender-ref ref="${log.root.appender:-NOP}"/>
+  </root>
+  <!--
+  By default, messages from KSBulk and the driver are directed to the NOP
+  appender, which allows for testing log messages at different levels while
+  keeping the console clean. If you need to debug some tests, you may want to
+  switch to the CONSOLE appender.
+  -->
+  <logger name="com.khulnasoft.oss.ksbulk" level="${log.ksbulk.level:-INFO}" additivity="false">
+    <appender-ref ref="${log.ksbulk.appender:-NOP}"/>
+  </logger>
+  <logger name="com.khulnasoft.oss.driver" level="${log.driver.level:-INFO}" additivity="false">
+    <appender-ref ref="${log.driver.appender:-NOP}"/>
+  </logger>
+  <logger name="com.khulnasoft.dse.driver" level="${log.driver.level:-INFO}" additivity="false">
+    <appender-ref ref="${log.driver.appender:-NOP}"/>
+  </logger>
+  <!-- Log messages from KSBulk and driver test infrastructures -->
+  <logger name="com.khulnasoft.oss.ksbulk.tests" level="${log.tests.level:-INFO}" additivity="false">
+    <appender-ref ref="${log.tests.appender:-CONSOLE}"/>
+  </logger>
+  <logger name="com.khulnasoft.oss.driver.api.testinfra" level="${log.tests.level:-INFO}" additivity="false">
+    <appender-ref ref="${log.tests.appender:-CONSOLE}"/>
+  </logger>
+  <!-- Log messages from remote CCM processes -->
+  <logger name="ksbulk.ccm.CCM_OUT" level="${log.ccm.level:-INFO}" additivity="false">
+    <appender-ref ref="${log.ccm.appender:-CONSOLE}"/>
+  </logger>
+  <logger name="ksbulk.ccm.CCM_ERR" level="${log.ccm.level:-INFO}" additivity="false">
+    <appender-ref ref="${log.ccm.appender:-CONSOLE}"/>
+  </logger>
+</configuration>
