@@ -373,7 +373,7 @@ available on the command-line via the `help` subcommand.
 [KhulnaSoft Bulk Loader: Examples for Loading From Other Locations]: https://www.khulnasoft.com/blog/2019/12/khulnasoft-bulk-loader-examples-loading-other-locations
  
 ## License
-Copyright KhulnaSoft, Inc.
+Copyright KhulnaSoft, Ltd.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 
